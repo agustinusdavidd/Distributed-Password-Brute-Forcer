@@ -7,6 +7,7 @@ import json
 # modules for logic
 from random import randint
 import hashlib
+from time import sleep
 
 # running versi API => uvicorn server:app --reload
 
@@ -27,7 +28,7 @@ def encodeChar(x: int) -> str :
         x = x // 26
     return result[::-1]
 
-# TODO : split job ke N buah client
+# TODO : split job jadi sequence
 # def getWorkload(N: int, iter: int) -> str :
 
 
@@ -60,13 +61,13 @@ def generateJob(n: int):
         #     })
 
         # (temp fix) generate semua kemungkinan kombinasi untuk job i
-        for j in range(750):
+        for j in range(26**3):
             sequence = encodeChar(j)
             if not ( "@" in sequence ) :
                 jobs.append({
                     'name' : 'job' + str(i+1),
-                    # 'enc' : password,
-                    'enc' : encode256("AA"),
+                    'enc' : password,
+                    # 'enc' : encode256("AA"),
                     'seq' : encodeChar(j)
                 })
 
@@ -74,6 +75,8 @@ def generateJob(n: int):
 jobs = []
 result = []
 passwords = []
+semJob = 0
+semResult = 0
 
 # generate N buah job (N buah password)
 N = 1
@@ -110,14 +113,28 @@ async def root():
 @app.get('/job')
 async def getJob():
     global jobs
-    if len(jobs) > 0:
-        return jobs.pop()
+    global semJob
+
+    while semJob > 0: # wait
+        sleep(0.01)
+
+    semJob += 1 # angkat semaphore
+    if len(jobs) > 0: # critical operation
+        job = jobs.pop() 
+        semJob -= 1 # turunin semaphore
+        return job
     else:
+        semJob -= 1 # turunin semaphore
         return {
             'name' : 'Empty',
             'enc' : None,
             'seq' : None,
         }
+
+@app.get('/job/all')
+def getJobs():
+    global jobs
+    return jobs
 
 # format body message yang diterima
 class Result(BaseModel):
@@ -134,10 +151,16 @@ async def getResults():
 @app.post('/result')
 async def receiveResult(res : Result):
     global result
+    global semResult
+
+    while semResult > 0: # wait
+        sleep(0.01)
+    semResult += 1
     result.append({
         'name' : res.name,
         'seq'  : res.seq
     })
+    semResult -= 1
 
 # implementasi socket
 
