@@ -85,6 +85,12 @@ generateJob(N)
 # implementasi dengan membuat API
 app = api.FastAPI()
 
+# TODO
+# 1. ACK dilakukan client setelah memproses job
+# 2. implementasi timeout di server
+# 3. Server menyimpan nama job yang dikerjakan client
+
+
 # path root, menampilkan semua path yang ada
 @app.get('/')
 async def root():
