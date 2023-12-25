@@ -1,64 +1,70 @@
-import threading
-import requests
-import json
+import socket
 import hashlib
 
-def encode256(string: str) -> str :
-    h = hashlib.new('sha256')
-    h.update(string.encode())
-    return h.hexdigest()
+def main():
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(('127.0.0.1', 6000))
 
-# implementasi apabila menggunakan API
-def postResult(jobName: str, sequence: str):
-    headers = {"Content-Type" : "Application/json"}
-    body = {
-        'name' : jobName,
-        'seq' : sequence
-        }
-    response = requests.post('http://127.0.0.1:8000/result', headers=headers, json=body)
-    print(response)
+    while True:
+        # Terima tugas dari server
+        job = client.recv(1024).decode('utf-8')
+        print(job)
+        job_name, start_job, end_job, hash_password = job.split(';')
 
-# Logic dasar aplikasi :
-# Ambil request
-job = requests.get('http://127.0.0.1:8000/job')
+        current_job = start_job
 
-# Parse request
-job_line = job.json()
-print(job.json())
+        password_found = False
 
-# Loop hingga job habis
-while job_line['name'] != 'Empty':
+        while current_job <= end_job:
+
+            # Lakukan brute force untuk mencari password
+            # (Pada contoh ini, kita hanya mencetak password yang dicoba)
+            print(f"Trying password: {current_job}")
+            hashed_job = sha256_hash(current_job)
+
+            # Cek apakah password ditemukan
+            if hashed_job == hash_password:
+                # Set boolean kalo password ditemukan dan break looping
+                # (Hanya ada 1 kombinasi yang benar)
+                password_found = True
+                break
+
+            current_job = increment_sequence(current_job)
+        
+        if password_found:
+            # Kirim ACK dan password ke server jika ditemukan
+            print(f"Password found {current_job} on {start_job}-{end_job}")
+            client.send(f"ACK {current_job};{job_name}".encode('utf-8'))
+        else:
+            # Kirim ACK jika password tidak ditemukan
+            client.send('ACK'.encode('utf-8'))   
+
+def increment_sequence(sequence):
+    # Fungsi ini menangani peningkatan ke nilai berikutnya dalam sequence
+    # Misalnya, dari "AAA" ke "AAB", atau dari "ZZZ" ke "AAAA"
+    sequence = list(sequence)
     
-    # Enkripsi sequence ke sha256
-    enc = encode256(job_line['seq'])
+    # Cek apakah kita perlu menambah digit atau tidak
+    for i in range(len(sequence)-1, -1, -1):
+        if sequence[i] == 'Z':
+            sequence[i] = 'A'
+        else:
+            sequence[i] = chr(ord(sequence[i]) + 1)
+            break
 
-    # Bandingkan hasil enkripsi
-    if enc == job_line['enc'] :
-        # Kirim reply ke server apabila benar
-        postResult(job_line['name'], job_line['seq'])
+    return ''.join(sequence)
 
-    # Request job baru
-    job = requests.get('http://127.0.0.1:8000/job')
+def sha256_hash(raw_pass: str):
+    # Membuat objek hash SHA-256
+    h = hashlib.new('sha256')
 
-    # Parse job baru
-    job_line = job.json()
-    print(job.json())
+    # Mengkonversi string menjadi bytes dan melakukan hashing
+    h.update(raw_pass.encode())
 
+    # Mendapatkan nilai hash dalam bentuk hex
+    hashed_result = h.hexdigest()
 
-# implementasi socket
+    return hashed_result
 
-# localhost = '127.0.0.1'
-# port = 6969
-
-# client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# client.connect((localhost, port))
-
-# def getJob():
-#     while True:
-#         try:
-#             job = client.recv(1024).decode()
-#         except Exception:
-#             client.close()
-
-# clientThread = threading.Thread(target=getJob)
-# clientThread.start()
+if __name__ == "__main__":
+    main()
